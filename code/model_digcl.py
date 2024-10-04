@@ -55,15 +55,17 @@ class Model(torch.nn.Module):
     def sim(self, z1: torch.Tensor, z2: torch.Tensor):
         z1 = F.normalize(z1)
         z2 = F.normalize(z2)
-        return torch.mm(z1, z2.t())
+        return torch.mm(z1, z2.t())     # (N.N) Qin,  dot product of the i-th vector in z1 with the j-th vector in z2. 1 is perfect sim, -1 is perfect disim, 0 is orthogonal
 
     def semi_loss(self, z1: torch.Tensor, z2: torch.Tensor):
-        def f(x): return torch.exp(x / self.tau)
+        def f(x): return torch.exp(x / self.tau)   # an exponential function scaled by temperature Qin
         refl_sim = f(self.sim(z1, z1))
         between_sim = f(self.sim(z1, z2))
         # return -torch.log(between_sim.diag() / (refl_sim.sum(1) + between_sim.sum(1) - refl_sim.diag()))
         # no inter negative loss
         return -torch.log(between_sim.diag() / (refl_sim.sum(1) + between_sim.diag() - refl_sim.diag()))
+    # refl_sim.sum(1) is sum over row,  total (scaled) similarity of each sample to all samples in the dataset, including itself.
+
 
     def batched_semi_loss(self, z1: torch.Tensor, z2: torch.Tensor,
                           batch_size: int):

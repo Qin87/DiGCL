@@ -29,10 +29,8 @@ def train(model: Model, x, edge_index):
     model.train()
     optimizer.zero_grad()
 
-    edge_index_1, edge_weight_1 = cal_fast_appr(
-        alpha_1, edge_index, x.shape[0], x.dtype)
-    edge_index_2, edge_weight_2 = cal_fast_appr(
-        alpha_2, edge_index, x.shape[0], x.dtype)
+    edge_index_1, edge_weight_1 = cal_fast_appr(alpha_1, edge_index, x.shape[0], x.dtype)
+    edge_index_2, edge_weight_2 = cal_fast_appr(alpha_2, edge_index, x.shape[0], x.dtype)
 
     x_1 = drop_feature(x, drop_feature_rate_1)
     x_2 = drop_feature(x, drop_feature_rate_2)
@@ -46,16 +44,41 @@ def train(model: Model, x, edge_index):
 
     return loss.item()
 
+def print_x(x):
+    print('\nthis x:')
+    x_min = torch.min(x).item()
+    x_max = torch.max(x).item()
+    zero_count = torch.sum(x == 0).item()
+    one_count = torch.sum(x == 1).item()
+
+    print(f"Minimum value: {x_min}")
+    print(f"Maximum value: {x_max}")
+    print(f"Number of zeros: {zero_count}")
+    print(f"Number of ones: {one_count}")
+
+    non_zero_one = x[(x != 0) & (x != 1)]
+    print("\nValues that are not 0 or 1:", end='')
+    if non_zero_one.numel() > 0:
+        formatted_values = [f"{v:.2f}" for v in non_zero_one.tolist()]
+        if len(formatted_values) > 10:
+            print(" ( total_num =", len(formatted_values),')\n', formatted_values[:10], "... (showing first 10)")
+        else:
+            print(formatted_values)
+        print(f"Total count of values not 0 or 1: {non_zero_one.numel()}")
+    else:
+        print("None")
+
+
 
 def test(model: Model, dataset, x, edge_index, edge_weight, y, final=False):
     model.eval()
-    z = model(x, edge_index, edge_weight)
+    z = model(x, edge_index, edge_weight)       # dim=128 Qin
     label_classification(z, y, data)
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--dataset', type=str, default='DBLP')
+    parser.add_argument('--dataset', type=str, default='cora_ml')
     parser.add_argument('--gpu_id', type=int, default=0)
     parser.add_argument('--config', type=str, default='config_digcl.yaml')
     parser.add_argument('--alpha', type=float, default=0.1)
@@ -69,6 +92,12 @@ if __name__ == '__main__':
 
     assert args.gpu_id in range(0, 8)
     torch.cuda.set_device(args.gpu_id)
+
+    # import os
+    # print(os.getcwd())
+    current_file_directory = os.path.dirname(os.path.abspath(__file__))
+    os.chdir(current_file_directory)
+    print(os.getcwd())
 
     config = yaml.load(open(args.config), Loader=SafeLoader)[args.dataset]
 
@@ -93,20 +122,23 @@ if __name__ == '__main__':
 
     path = osp.join(osp.expanduser('.'), 'datasets')
     print(args.normalize_features)
-    dataset = get_citation_dataset(
-        args.dataset, args.alpha, args.recache, args.normalize_features, args.adj_type)
+    dataset = get_citation_dataset(args.dataset, args.alpha, args.recache, args.normalize_features, args.adj_type)     # their dataset is randomized, so are different from mine
+    # dataset = citation_datasets(root='./cora_ml.npz')
     print("Num of edges ", dataset[0].num_edges)
 
     data = dataset[0]
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     data = data.to(device)
+    print_x(data.x)
     edge_index_init, edge_weight_init = cal_fast_appr(
         alpha_1, data.edge_index, data.x.shape[0], data.x.dtype)
 
     encoder = Encoder(dataset.num_features, num_hidden, activation,
                       base_model=base_model, k=num_layers).to(device)
+    print("encoder:", encoder)          # Qin
     model = Model(encoder, num_hidden, num_proj_hidden, tau).to(device)
+    print("Model:", model)
     optimizer = torch.optim.Adam(
         model.parameters(), lr=learning_rate, weight_decay=weight_decay)
 

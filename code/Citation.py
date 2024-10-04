@@ -64,8 +64,9 @@ class Citation(InMemoryDataset):
     #     return
 
     def process(self):
-        data = citation_datasets(
-            self.raw_dir, self.name, self.alpha, self.adj_type)
+        # data = citation_datasets(self.raw_dir, self.name, self.alpha, self.adj_type)       # DiGCL original
+        data = citation_datasets(self.raw_dir+'/cora_ml.npz',  self.alpha, data_split=10, adj_type=self.adj_type)       # Qin
+
         # data = read_planetoid_data(self.raw_dir, self.name)
         data = data if self.pre_transform is None else self.pre_transform(data)
         torch.save(self.collate([data]), self.processed_paths[0])
@@ -74,69 +75,151 @@ class Citation(InMemoryDataset):
         return '{}()'.format(self.name)
 
 
-def citation_datasets(path="./datasets", dataset='cora_ml', alpha=0.1, adj_type=None):
+# def citation_datasets(path="./datasets", dataset='cora_ml', alpha=0.1, adj_type=None):        # original DiGCL
+#     # path = os.path.join(save_path, dataset)
+#     os.makedirs(path, exist_ok=True)
+#     dataset_path = os.path.join(path, '{}.npz'.format(dataset))
+#     g = load_npz_dataset(dataset_path)
+#     adj, features, labels = g['A'], g['X'], g['z']
+#
+#     # Set new random splits:
+#     # * 20 * num_classes labels for training
+#     # * 500 labels for validation
+#     # * the rest for testing
+#
+#     mask = train_test_split(
+#         labels, seed=1020, train_examples_per_class=20, val_size=500, test_size=None)       # Original
+#         # labels, seed=0, train_examples_per_class=20, val_size=500, test_size=None)        # Qin
+#
+#     mask['train'] = torch.from_numpy(mask['train']).bool()
+#     mask['val'] = torch.from_numpy(mask['val']).bool()
+#     mask['test'] = torch.from_numpy(mask['test']).bool()
+#
+#     coo = adj.tocoo()
+#     values = coo.data
+#     indices = np.vstack((coo.row, coo.col))
+#     indices = torch.from_numpy(indices).long()
+#     features = torch.from_numpy(features.todense()).float()
+#     labels = torch.from_numpy(labels).long()
+#     if adj_type == 'un':
+#         print("Processing to undirected adj")
+#         indices = to_undirected(indices)
+#         edge_index, edge_weight = get_undirected_adj(
+#             indices, features.shape[0], features.dtype)
+#         data = Data(x=features, edge_index=edge_index,
+#                     edge_weight=edge_weight, y=labels)
+#     elif adj_type == 'appr':
+#         print("Processing approximate personalized pagerank adj matrix")
+#         edge_index, edge_weight = get_appr_directed_adj(
+#             alpha, indices, features.shape[0], features.dtype)
+#         data = Data(x=features, edge_index=edge_index,
+#                     edge_weight=edge_weight, y=labels)
+#     elif adj_type == 'loop':
+#         print("Processing to original directed adj with self-loops")
+#         edge_weight = torch.ones(
+#             (indices.size(1), ), dtype=features.dtype, device=indices.device)
+#         edge_index, edge_weight = add_self_loops(
+#             indices, edge_weight, 1, features.shape[0])
+#         data = Data(x=features, edge_index=edge_index,
+#                     edge_weight=edge_weight, y=labels)
+#     elif adj_type == 'or':
+#         print("Processing to original directed adj")
+#         data = Data(x=features, edge_index=indices, edge_weight=None, y=labels)
+#     elif adj_type == 'fast':
+#         print("Processing to get fast approximate adj")
+#         edge_index, edge_weight = cal_fast_appr(
+#             alpha, indices, features.shape[0], features.dtype)
+#         data = Data(x=features, edge_index=edge_index,
+#                     edge_weight=edge_weight, y=labels)
+#         # data.sparse_adj = sparse_adj
+#     else:
+#         print("Unsupported adj type.")
+#         sys.exit()
+#
+#     data.train_mask = mask['train']
+#     data.val_mask = mask['val']
+#     data.test_mask = mask['test']
+#     return data
+
+# def citation_datasets(path="./datasets", dataset='cora_ml', alpha=0.1, adj_type=None):
+# def citation_datasets(root="./data", alpha=0.1, data_split=10, adj_type=None):
+#     # path = os.path.join(save_path, dataset)
+#     # os.makedirs(path, exist_ok=True)
+#     # dataset_path = os.path.join(path, '{}.npz'.format(dataset))
+#     g = load_npz_dataset(root)
+#     adj, features, labels = g['A'], g['X'], g['z']
+#
+#     coo = adj.tocoo()
+#     values = coo.data
+#     indices = np.vstack((coo.row, coo.col))
+#     indices = torch.from_numpy(indices).long()
+#     features = torch.from_numpy(features.todense()).float()
+#
+#     # Set new random splits:
+#     # * 20 * num_classes labels for training
+#     # * 500 labels for validation
+#     # * the rest for testing
+#     masks = {}
+#     masks['train'], masks['val'], masks['test'] = [], [], []
+#     for split in range(data_split):
+#         mask = train_test_split(labels, seed=split, train_examples_per_class=20, val_size=500, test_size=None)
+#
+#         mask['train'] = torch.from_numpy(mask['train']).bool()
+#         mask['val'] = torch.from_numpy(mask['val']).bool()
+#         mask['test'] = torch.from_numpy(mask['test']).bool()
+#
+#         masks['train'].append(mask['train'].unsqueeze(-1))
+#         masks['val'].append(mask['val'].unsqueeze(-1))
+#         masks['test'].append(mask['test'].unsqueeze(-1))
+#
+#     labels = torch.from_numpy(labels).long()
+#     data = Data(x=features, edge_index=indices, edge_weight=None, y=labels)
+#
+#     data.train_mask = torch.cat(masks['train'], axis=-1)
+#     data.val_mask = torch.cat(masks['val'], axis=-1)
+#     data.test_mask = torch.cat(masks['test'], axis=-1)
+#
+#     # return [data]
+#     return data
+
+def citation_datasets(root="./data", alpha=0.1, data_split=10, adj_type=None):   # Qin remove split for self-supervised learning
     # path = os.path.join(save_path, dataset)
-    os.makedirs(path, exist_ok=True)
-    dataset_path = os.path.join(path, '{}.npz'.format(dataset))
-    g = load_npz_dataset(dataset_path)
+    # os.makedirs(path, exist_ok=True)
+    # dataset_path = os.path.join(path, '{}.npz'.format(dataset))
+    g = load_npz_dataset(root)
     adj, features, labels = g['A'], g['X'], g['z']
-
-    # Set new random splits:
-    # * 20 * num_classes labels for training
-    # * 500 labels for validation
-    # * the rest for testing
-
-    mask = train_test_split(
-        labels, seed=1020, train_examples_per_class=20, val_size=500, test_size=None)
-
-    mask['train'] = torch.from_numpy(mask['train']).bool()
-    mask['val'] = torch.from_numpy(mask['val']).bool()
-    mask['test'] = torch.from_numpy(mask['test']).bool()
 
     coo = adj.tocoo()
     values = coo.data
     indices = np.vstack((coo.row, coo.col))
     indices = torch.from_numpy(indices).long()
     features = torch.from_numpy(features.todense()).float()
-    labels = torch.from_numpy(labels).long()
-    if adj_type == 'un':
-        print("Processing to undirected adj")
-        indices = to_undirected(indices)
-        edge_index, edge_weight = get_undirected_adj(
-            indices, features.shape[0], features.dtype)
-        data = Data(x=features, edge_index=edge_index,
-                    edge_weight=edge_weight, y=labels)
-    elif adj_type == 'appr':
-        print("Processing approximate personalized pagerank adj matrix")
-        edge_index, edge_weight = get_appr_directed_adj(
-            alpha, indices, features.shape[0], features.dtype)
-        data = Data(x=features, edge_index=edge_index,
-                    edge_weight=edge_weight, y=labels)
-    elif adj_type == 'loop':
-        print("Processing to original directed adj with self-loops")
-        edge_weight = torch.ones(
-            (indices.size(1), ), dtype=features.dtype, device=indices.device)
-        edge_index, edge_weight = add_self_loops(
-            indices, edge_weight, 1, features.shape[0])
-        data = Data(x=features, edge_index=edge_index,
-                    edge_weight=edge_weight, y=labels)
-    elif adj_type == 'or':
-        print("Processing to original directed adj")
-        data = Data(x=features, edge_index=indices, edge_weight=None, y=labels)
-    elif adj_type == 'fast':
-        print("Processing to get fast approximate adj")
-        edge_index, edge_weight = cal_fast_appr(
-            alpha, indices, features.shape[0], features.dtype)
-        data = Data(x=features, edge_index=edge_index,
-                    edge_weight=edge_weight, y=labels)
-        # data.sparse_adj = sparse_adj
-    else:
-        print("Unsupported adj type.")
-        sys.exit()
 
-    data.train_mask = mask['train']
-    data.val_mask = mask['val']
-    data.test_mask = mask['test']
+    # Set new random splits:
+    # * 20 * num_classes labels for training
+    # * 500 labels for validation
+    # * the rest for testing
+    masks = {}
+    masks['train'], masks['val'], masks['test'] = [], [], []
+    # for split in range(data_split):
+    #     mask = train_test_split(labels, seed=split, train_examples_per_class=20, val_size=500, test_size=None)
+    #
+    #     mask['train'] = torch.from_numpy(mask['train']).bool()
+    #     mask['val'] = torch.from_numpy(mask['val']).bool()
+    #     mask['test'] = torch.from_numpy(mask['test']).bool()
+    #
+    #     masks['train'].append(mask['train'].unsqueeze(-1))
+    #     masks['val'].append(mask['val'].unsqueeze(-1))
+    #     masks['test'].append(mask['test'].unsqueeze(-1))
+
+    labels = torch.from_numpy(labels).long()
+    data = Data(x=features, edge_index=indices, edge_weight=None, y=labels)
+
+    # data.train_mask = torch.cat(masks['train'], axis=-1)
+    # data.val_mask = torch.cat(masks['val'], axis=-1)
+    # data.test_mask = torch.cat(masks['test'], axis=-1)
+
+    # return [data]
     return data
 
 

@@ -19,10 +19,11 @@ def get_citation_dataset(name, alpha=0.1, recache=False, normalize_features=Fals
     if recache == True:
         print("Delete old processed data cache...")
         if osp.exists(file_path):
-            shutil.rmtree(file_path)
+            shutil.rmtree(file_path)    # removes it along with all its contents.   Qin
         os.mkdir(file_path)
         print('Finish cleaning.')
     dataset = Citation(path, name, alpha, adj_type=adj_type)
+    # dataset = citation_datasets(root='./cora_ml.npz')
     print('Finish dataset preprocessing.')
     if transform is not None and normalize_features:
         dataset.transform = T.Compose([T.NormalizeFeatures(), transform])
